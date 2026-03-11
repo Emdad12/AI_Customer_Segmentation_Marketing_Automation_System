@@ -1,4 +1,5 @@
 import streamlit as st
+import sklearn
 import pandas as pd
 import pickle
 import requests
@@ -135,5 +136,6 @@ if st.button("Predict Customer Segment"):
         "email_text": email_text
 
         }
+
 
     requests.post(webhook_url, json=payload)
