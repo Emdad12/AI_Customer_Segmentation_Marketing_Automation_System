@@ -8,7 +8,10 @@ from utils.email_generator import generate_email
 from utils.marketing import strategy_map
 from utils.segmentations import segment_map
 from pathlib import Path
-
+if 'predicted' not in st.session_state:
+    st.session_state.predicted = False
+    st.session_state.segment = None
+    st.session_state.email_text = None
 BASE_DIR = Path(__file__).resolve().parent
 
 model_path = BASE_DIR / "model" / "kmeans_model.pkl"
@@ -101,15 +104,10 @@ if st.button("Predict Customer Segment"):
     # prediction
     cluster = model.predict(data_scaled)[0]
 
-    segment = segment_map.get(cluster,"Unknown")
-
-
-    # marketing strategy
-    strategy = strategy_map.get(segment,"Unknown")
-
-    # email generation
-    email_text = generate_email(segment)
-
+    st.session_state.segment = segment_map.get(cluster, "Unknown")
+    st.session_state.strategy = strategy_map.get(st.session_state.segment, "Unknown")
+    st.session_state.email_text = generate_email(st.session_state.segment)
+    st.session_state.predicted = True
 
     # -------------------------
     # Display Results
@@ -125,22 +123,33 @@ if st.button("Predict Customer Segment"):
 
     st.text(email_text)
 
-    if st.button("🚀 Trigger Marketing Campaign"):
+    if st.session_state.predicted:
+    st.success(f"Customer Segment: {st.session_state.segment}")
+    st.info(st.session_state.strategy)
+    st.text(st.session_state.email_text)
+
+    # Use a unique key for the second button
+    if st.button("🚀 Trigger Marketing Campaign", key="trigger_btn"):
         webhook_url = "https://emdad.app.n8n.cloud/webhook/customer-segmentation"
+        
         payload = {
             "customer_id": customer_id,
             "email": email,
-            "segment": st.session_state['segment'],
-            "strategy": st.session_state['strategy'],
-            "email_text": st.session_state['email_text']
+            "segment": st.session_state.segment,
+            "strategy": st.session_state.strategy,
+            "email_text": st.session_state.email_text
         }
         
-        with st.spinner("Sending to n8n..."):
+        with st.spinner("Sending data to n8n..."):
             try:
-                res = requests.post(webhook_url, json=payload)
+                # Add a timeout so the app doesn't hang forever
+                res = requests.post(webhook_url, json=payload, timeout=10)
+                
                 if res.status_code == 200:
-                    st.success("Sent to n8n successfully!")
+                    st.balloons() # Visual confirmation
+                    st.success("✅ Success! n8n has received the data.")
                 else:
-                    st.error(f"n8n error: {res.status_code}")
+                    st.error(f"❌ n8n reached, but it returned error: {res.status_code}")
+                    st.write("Make sure your n8n workflow is ACTIVE.")
             except Exception as e:
-                st.error(f"Could not connect to n8n: {e}")
+                st.error(f"📡 Connection Failed: {e}")
